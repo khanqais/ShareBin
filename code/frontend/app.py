@@ -13,6 +13,10 @@ def main():
         with open(filepath, 'wb') as f:
             f.write(uploaded.getbuffer())
         
+        st.code(f"The unique code is: {uID}" , language="Markdown")
+
+    
+        
     
 
 
