@@ -1,7 +1,0 @@
-[server]
-maxUploadSize = 500
-
-[theme]
-base="dark"
-primaryColor="#4bff98"
-

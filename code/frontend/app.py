@@ -1,163 +1,128 @@
 import os
+import io
 import streamlit as st
-import uuid
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
-
 
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("MONGO_DB_NAME", "sharebin")
 FILE_COLLECTION = os.getenv("MONGO_COLLECTION", "files")
-TEXT_COLLECTION = "texts"  
+TEXT_COLLECTION = "texts"
 
-print(f"Connecting to: {MONGO_URI}")
-print(f"Database name: {DB_NAME}")
-
-def connect_db():
-    client = MongoClient(MONGO_URI)
+async def connect_db():
+    client = AsyncIOMotorClient(MONGO_URI)
     db = client[DB_NAME]
     return db, client
 
-def save_file_data(id, path):
-    try:
-        db, client = connect_db()
-        collection = db[FILE_COLLECTION]
-        document = {"code": id, "file_path": path}
-        collection.insert_one(document)
-        client.close()
-        return True
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return False
+async def is_keyword_taken(keyword, collection_name):
+    db, client = await connect_db()
+    collection = db[collection_name]
+    exists = await collection.find_one({"keyword": keyword})
+    return exists is not None
 
-def save_text_data(id, text_content):
-    try:
-        db, client = connect_db()
-        collection = db[TEXT_COLLECTION]
-        document = {"code": id, "content": text_content}
-        collection.insert_one(document)
-        client.close()
-        return True
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return False
+async def save_file_data(keyword, file_buffer, filename):
+    db, client = await connect_db()
+    collection = db[FILE_COLLECTION]
 
-def get_file_path(code):
-    try:
-        db, client = connect_db()
-        collection = db[FILE_COLLECTION]
-        result = collection.find_one({"code": code})
-        client.close()
-        return result["file_path"] if result else None
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return None
+    if await is_keyword_taken(keyword, FILE_COLLECTION):
+        return False, "Keyword already taken. Choose another."
 
-def get_text_content(code):
-    try:
-        db, client = connect_db()
-        collection = db[TEXT_COLLECTION]
-        result = collection.find_one({"code": code})
-        client.close()
-        return result["content"] if result else None
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return None
+    document = {"keyword": keyword, "filename": filename, "file_data": file_buffer.getvalue()}
+    await collection.insert_one(document)
+    return True, "File saved successfully."
+
+async def save_text_data(keyword, text_content):
+    db, client = await connect_db()
+    collection = db[TEXT_COLLECTION]
+
+    if await is_keyword_taken(keyword, TEXT_COLLECTION):
+        return False, "Keyword already taken. Choose another."
+
+    document = {"keyword": keyword, "content": text_content}
+    await collection.insert_one(document)
+    return True, "Text saved successfully."
+
+async def get_file(keyword):
+    db, client = await connect_db()
+    collection = db[FILE_COLLECTION]
+    result = await collection.find_one({"keyword": keyword})
+    return result if result else None
+
+async def get_text_content(keyword):
+    db, client = await connect_db()
+    collection = db[TEXT_COLLECTION]
+    result = await collection.find_one({"keyword": keyword})
+    return result["content"] if result else None
 
 def main():
-    
-    os.makedirs(f"{os.getcwd()}/files", exist_ok=True)
-    
     st.title("📂 ShareBin - File & Text Sharing")
-    
-    try:
-        db, client = connect_db()
-        client.close()
-    except Exception as e:
-        st.error(f"❌ MongoDB Connection Error: {str(e)}")
-    
-    
+
     tab1, tab2, tab3 = st.tabs(["Share Files", "Share Text", "Access"])
-    
-    
+
     with tab1:
         st.header("📄 Upload a File")
-        uploaded = st.file_uploader("UPLOAD HERE :)")
+        keyword = st.text_input("Enter Access Keyword", key="file_keyword")
+        uploaded = st.file_uploader("Upload Your File")
+
+        if uploaded and keyword:
+            file_buffer = io.BytesIO(uploaded.getbuffer())
+
+            with st.spinner("Uploading... Please wait!"):
+                success, message = st.session_state.loop.run_until_complete(
+                    save_file_data(keyword, file_buffer, uploaded.name)
+                )
             
-        if uploaded:
-            uID = uuid.uuid4().hex[:8]
-            filepath = os.path.join(f"{os.getcwd()}/files", f"{uID}_{uploaded.name}")
-            with open(filepath, 'wb') as f:
-                f.write(uploaded.getbuffer())
-            
-            if save_file_data(uID, filepath):
-                st.success("✅ Your unique code (select and copy):")
-                # Display code in a very visible way
-                st.code(uID, language=None)
-                st.info("👆 Select the code above and press Ctrl+C (or Cmd+C) to copy")
+            if success:
+                st.success(f"✅ File saved! Use this keyword to access: `{keyword}`")
             else:
-                st.error("Failed to save file information to database.")
-    
-    
+                st.error(f"❌ {message}")
+
     with tab2:
         st.header("📝 Share Text")
-        
+        keyword = st.text_input("Enter Access Keyword", key="text_keyword")
         text_content = st.text_area("Enter your text here:", height=300)
-        
-        if st.button("Generate Sharing Code"):
-            if text_content.strip():
-                uID = uuid.uuid4().hex[:8]
-                
-                if save_text_data(uID, text_content):
-                    st.success("✅ Your unique code (select and copy):")
-                    # Display code in a very visible way
-                    st.code(uID, language=None)
-                    st.info("👆 Select the code above and press Ctrl+C (or Cmd+C) to copy")
+
+        if st.button("Save Text"):
+            if keyword and text_content.strip():
+                with st.spinner("Saving text... Please wait!"):
+                    success, message = st.session_state.loop.run_until_complete(
+                        save_text_data(keyword, text_content)
+                    )
+
+                if success:
+                    st.success(f"✅ Text saved! Use this keyword to access: `{keyword}`")
                 else:
-                    st.error("Failed to save text to database.")
+                    st.error(f"❌ {message}")
             else:
-                st.error("Please enter some text before generating a code.")
-    
-    
+                st.error("Please enter both keyword and text before saving.")
+
     with tab3:
         st.header("🔑 Access Shared Content")
-        textIn = st.text_input("Enter Unique Code")
-            
-        if textIn:
-            st.info(f"Looking up content for code: `{textIn}`")
-            
-            
-            file_path = get_file_path(textIn)
-            
-            if file_path:
-                if os.path.exists(file_path):
-                    st.success("✅ File found!")
-                    with open(file_path, "rb") as file:
-                        st.download_button(label="📥 Download File",
-                                          data=file,
-                                          file_name=os.path.basename(file_path))
-                else:
-                    st.error("❌ File exists in database but not on disk.")
+        keyword = st.text_input("Enter Access Keyword", key="search_keyword")
+
+        if keyword:
+            st.info(f"Looking up content for keyword: `{keyword}`")
+
+            with st.spinner("Fetching content... Please wait!"):
+                file_result = st.session_state.loop.run_until_complete(get_file(keyword))
+
+            if file_result:
+                st.success("✅ File found!")
+                st.download_button(label="📥 Download File",
+                                   data=file_result["file_data"],
+                                   file_name=file_result["filename"])
             else:
-                
-                text_content = get_text_content(textIn)
-                
+                text_content = st.session_state.loop.run_until_complete(get_text_content(keyword))
                 if text_content:
                     st.success("✅ Text content found!")
                     st.text_area("Shared Text:", value=text_content, height=300)
-                    
-                    
-                    st.markdown("""
-                    <style>
-                    .stCodeMirrorEditor {
-                        overflow-y: auto !important;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
                 else:
-                    st.error("❌ Invalid Code! No content found.")
+                    st.error("❌ Invalid Keyword! No content found.")
 
 if __name__ == "__main__":
+    if "loop" not in st.session_state:
+        import asyncio
+        st.session_state.loop = asyncio.new_event_loop()
     main()
