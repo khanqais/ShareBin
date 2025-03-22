@@ -72,16 +72,6 @@ def main():
     
     st.title("📂 ShareBin - File & Text Sharing")
     
-    # Add clipboard.js from CDN to the page
-    st.markdown("""
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            new ClipboardJS('.copy-button');
-        });
-    </script>
-    """, unsafe_allow_html=True)
-    
     try:
         db, client = connect_db()
         client.close()
@@ -103,22 +93,10 @@ def main():
                 f.write(uploaded.getbuffer())
             
             if save_file_data(uID, filepath):
-                st.success("✅ Your unique code:")
-                
-                # Create an input field with the code and a copy button
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.code(uID, language=None)
-                with col2:
-                    if st.button("Copy Code", key="copy_file"):
-                        st.write(f'<p id="copy-status" style="color:green;"></p>', unsafe_allow_html=True)
-                        # Use JavaScript to copy to clipboard
-                        st.markdown(f"""
-                        <script>
-                            navigator.clipboard.writeText('{uID}');
-                            document.getElementById('copy-status').textContent = '✓ Copied!';
-                        </script>
-                        """, unsafe_allow_html=True)
+                st.success("✅ Your unique code (select and copy):")
+                # Display code in a very visible way
+                st.code(uID, language=None)
+                st.info("👆 Select the code above and press Ctrl+C (or Cmd+C) to copy")
             else:
                 st.error("Failed to save file information to database.")
     
@@ -133,22 +111,10 @@ def main():
                 uID = uuid.uuid4().hex[:8]
                 
                 if save_text_data(uID, text_content):
-                    st.success("✅ Your unique code:")
-                    
-                    # Create an input field with the code and a copy button
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.code(uID, language=None)
-                    with col2:
-                        if st.button("Copy Code", key="copy_text"):
-                            # Use JavaScript to copy to clipboard
-                            st.markdown(f"""
-                            <script>
-                                navigator.clipboard.writeText('{uID}');
-                                document.getElementById('copy-status-text').textContent = '✓ Copied!';
-                            </script>
-                            """, unsafe_allow_html=True)
-                            st.write('<p id="copy-status-text" style="color:green;"></p>', unsafe_allow_html=True)
+                    st.success("✅ Your unique code (select and copy):")
+                    # Display code in a very visible way
+                    st.code(uID, language=None)
+                    st.info("👆 Select the code above and press Ctrl+C (or Cmd+C) to copy")
                 else:
                     st.error("Failed to save text to database.")
             else:
