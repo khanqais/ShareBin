@@ -3,6 +3,7 @@ import streamlit as st
 import uuid
 from pymongo import MongoClient
 from dotenv import load_dotenv
+import streamlit.components.v1 as components
 
 
 load_dotenv()
@@ -66,6 +67,35 @@ def get_text_content(code):
         st.error(f"Database error: {str(e)}")
         return None
 
+def display_code_with_clipboard(code):
+    # HTML and JavaScript for clipboard functionality - using triple quotes for multiline strings
+    clipboard_html = f"""
+    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+        <code id="codeElement" style="padding: 5px 10px; background-color: #f0f2f6; border-radius: 4px; margin-right: 10px;">{code}</code>
+        <button onclick="copyToClipboard()" style="cursor: pointer; border: none; background-color: #4CAF50; color: white; padding: 5px 10px; border-radius: 4px;">Copy</button>
+    </div>
+    <div id="copyMessage" style="color: #4CAF50; margin-top: 5px; display: none;">✓ Copied to clipboard!</div>
+    
+    <script>
+    function copyToClipboard() {{
+        var codeText = document.getElementById("codeElement").innerText;
+        navigator.clipboard.writeText(codeText).then(function() {{
+            var copyMessage = document.getElementById("copyMessage");
+            copyMessage.style.display = "block";
+            setTimeout(function() {{
+                copyMessage.style.display = "none";
+            }}, 2000);
+        }});
+    }}
+    
+    // Auto-copy to clipboard on load
+    window.onload = function() {{
+        copyToClipboard();
+    }}
+    </script>
+    """
+    components.html(clipboard_html, height=80)
+
 def main():
     
     os.makedirs(f"{os.getcwd()}/files", exist_ok=True)
@@ -95,7 +125,8 @@ def main():
                 f.write(uploaded.getbuffer())
             
             if save_file_data(uID, filepath):
-                st.success(f"✅ Your unique code: `{uID}` (Use this to download your file)")
+                st.success("✅ Your unique code (automatically copied to clipboard):")
+                display_code_with_clipboard(uID)
             else:
                 st.error("Failed to save file information to database.")
     
@@ -110,7 +141,8 @@ def main():
                 uID = uuid.uuid4().hex[:8]
                 
                 if save_text_data(uID, text_content):
-                    st.success(f"✅ Your unique code: `{uID}` (Use this to access your text)")
+                    st.success("✅ Your unique code (automatically copied to clipboard):")
+                    display_code_with_clipboard(uID)
                 else:
                     st.error("Failed to save text to database.")
             else:
