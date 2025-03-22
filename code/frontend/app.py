@@ -81,7 +81,7 @@ def main():
         st.error(f"❌ MongoDB Connection Error: {str(e)}")
     
     
-    tab1, tab2, tab3 = st.tabs(["Share Files", "Share Text", "Download"])
+    tab1, tab2, tab3 = st.tabs(["Share Files", "Share Text", "Access"])
     
     
     with tab1:
