@@ -1,38 +1,44 @@
 import os
 import streamlit as st
 import uuid
-import mysql.connector as mysql
-from dotenv import load_dotenv
+import mysql.connector
 
-load_dotenv()
+DB_HOST = "localhost"
+DB_USER = "fileUser"
+DB_PASSWORD = "share_user"
+DB_NAME = "sharebin"
 
-def db():
+
+
+def connect_db():
     return mysql.connector.connect(
-        host=os.getenv("DB_HOST"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME")
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
     )
 
 
-file_dir = {} 
-
+def save_data(id, path):
+    db=connect_db()
+    cursor=db.cursor()
+    query="INSERT INTO files (code, file_path) VALUES (%s, %s)"
+    cursor.execute(query,(id,path))
+    db.commit()
+    cursor.close()
+    db.close()
+    
+    
 def download_file(code):
-    
-    if code in file_dir:
-    
-        file_path = file_dir.get(code) 
-    
-        if os.path.exists(file_path):
-    
-            print("exists")
-    
-            with open(file_path, 'rb') as f:
-                st.download_button(data=f, label="⬇️ Download File", file_name=os.path.basename(file_path), mime="application/octet-stream")
-        else:
-            st.error("❌ File not found.")
-    else:
-        st.error("❌ Invalid code.")
+    db = connect_db()
+    cursor = db.cursor()
+    query = "SELECT file_path FROM files WHERE code = %s"
+    cursor.execute(query, (code,))
+    result = cursor.fetchone()
+    cursor.close()
+    db.close()
+    return result[0] if result else None
+
 
 def main():
     
@@ -43,12 +49,12 @@ def main():
     if uploaded:
     
         uID = uuid.uuid4().hex[:8] 
-        filepath = os.path.join(os.getcwd(), f"{uploaded.name}_{uID}")
+        filepath = os.path.join(f"{os.getcwd()}/files", f"{uID}_{uploaded.name}")
 
         with open(filepath, 'wb') as f:
             f.write(uploaded.getbuffer())
 
-        file_dir[uID] = filepath 
+        save_data(uID,filepath)
         st.success(f"✅ Your unique code: `{uID}` (Use this to download your file)")
 
     st.header("🔑 Enter Code to Download File")
@@ -56,7 +62,16 @@ def main():
     
     if textIn:
         st.info(f"The entered unique code is: `{textIn}`") 
-        download_file(textIn) 
+        file_path = download_file(textIn)
+
+        if file_path:
+            with open(file_path, "rb") as file:
+                st.download_button(label="📥 Download File",
+                                   data=file,
+                                   file_name=os.path.basename(file_path))
+        else:   
+            st.error("❌ Invalid Code! No file found.")
+
 
 if __name__ == "__main__":
     main()
