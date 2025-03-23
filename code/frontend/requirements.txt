@@ -2,3 +2,4 @@ streamlit
 pymongo
 python-dotenv
 motor
+nest_asyncio
